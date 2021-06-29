@@ -4,7 +4,7 @@ import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Effect.Console (log)
-import Prelude (Unit, discard, show, (+), (-), (<), negate, (>=), (/=))
+import Prelude (Unit, discard, negate, otherwise, show, (+), (-), (/=), (<), (>=), (==), type (~>))
 
 test :: Effect Unit
 test = do
@@ -34,6 +34,10 @@ test = do
   log $ show $ findIndex (_ >= 2) (1 : 2 : 3 : Nil)
   log $ show $ findIndex (_ >= 99) (1 : 2 : 3 : Nil)
   log $ show $ findIndex (10 /= _) (Nil :: List Int)
+  log $ show $ findLastIndex (_ == 10) (Nil :: List Int)
+  log $ show $ findLastIndex (_ == 10) (10 : 5 : 10 : -1 : 2 : 10 : Nil)
+  log $ show $ findLastIndex (_ == 10) (11 : 12 : Nil)
+  log $ show $ reverse (10 : 20 : 30 : Nil)
 
 flip :: ∀ a b c. (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
@@ -111,6 +115,23 @@ findIndex :: ∀ a. (a -> Boolean) -> List a -> Maybe Int
 findIndex _ Nil = Nothing
 findIndex pred l = go 0 l
   where
+    go :: Int -> List a -> Maybe Int
     go acc (x : _) | pred x = Just acc
     go _ Nil = Nothing
     go acc (_ : xs) = go (acc + 1) xs
+
+findLastIndex :: ∀ a. (a -> Boolean) -> List a -> Maybe Int
+findLastIndex _ Nil = Nothing
+findLastIndex pred l = go 0 l Nothing
+  where
+    go :: Int -> List a -> Maybe Int -> Maybe Int
+    go _ Nil result = result
+    go acc (x : xs) result | pred x = go (acc + 1) xs (Just acc)
+                           | otherwise = go (acc + 1) xs result
+
+reverse :: List ~> List
+reverse Nil = Nil
+reverse l = go l Nil
+  where
+    go (x : xs) acc = go xs (x : acc)
+    go Nil acc = acc
