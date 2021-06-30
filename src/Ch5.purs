@@ -4,7 +4,9 @@ import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Effect.Console (log)
-import Prelude (Unit, discard, negate, otherwise, show, (+), (-), (/=), (<), (>=), (==), type (~>))
+import Prelude (
+  Unit, discard, negate, otherwise, show, (+), (-), (/=), (<), (>=), (==), 
+  type (~>), (>), (<<<))
 
 test :: Effect Unit
 test = do
@@ -31,13 +33,21 @@ test = do
   log $ show $ index (Nil :: List Unit) 0
   log $ show $ index (1 : 2 : 3 : Nil) (-99)
   log $ show $ (1 : 2 : 3 : Nil) !! 1
+  log "Find Index --"
   log $ show $ findIndex (_ >= 2) (1 : 2 : 3 : Nil)
   log $ show $ findIndex (_ >= 99) (1 : 2 : 3 : Nil)
   log $ show $ findIndex (10 /= _) (Nil :: List Int)
+  log "Find Last Index --"
   log $ show $ findLastIndex (_ == 10) (Nil :: List Int)
   log $ show $ findLastIndex (_ == 10) (10 : 5 : 10 : -1 : 2 : 10 : Nil)
   log $ show $ findLastIndex (_ == 10) (11 : 12 : Nil)
+  log "Reverse --"
   log $ show $ reverse (10 : 20 : 30 : Nil)
+  log "Concat --"
+  log $ show $ concat ((1 : 2 : 3 : Nil) : (4 : 5 : Nil) : (6 : Nil) : (Nil) : Nil)
+  log "Filter --"
+  log $ show $ filter (4 > _) $ (1 : 2 : 3 : 4 : 5 : 6 : Nil)
+  log $ show $ filter' (4 > _) $ (1 : 2 : 3 : 4 : 5 : 6 : Nil)
 
 flip :: ∀ a b c. (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
@@ -135,3 +145,19 @@ reverse l = go l Nil
   where
     go (x : xs) acc = go xs (x : acc)
     go Nil acc = acc
+
+concat :: ∀ a. List (List a) -> List a
+concat Nil = Nil
+concat (Nil : xss) = concat xss
+concat ((x : xs) : xss) = x : concat (xs : xss)
+
+filter :: ∀ a. (a -> Boolean) -> List a -> List a
+filter _ Nil = Nil
+filter pred (x : xs) | pred x = x : filter pred xs
+                     | otherwise = filter pred xs
+
+filter' :: ∀ a. (a -> Boolean) -> List a -> List a
+filter' pred = reverse <<< go Nil
+  where
+    go acc Nil = acc
+    go acc (x : xs) = if pred x then go (x : acc) xs else go acc xs
