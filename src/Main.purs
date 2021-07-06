@@ -2,8 +2,8 @@ module Main where
 
 import Prelude
 
-import Ch9 as Ch9
+import Ch11 as Ch11
 import Effect (Effect)
 
 main :: Effect Unit
-main = Ch9.test
+main = Ch11.test
