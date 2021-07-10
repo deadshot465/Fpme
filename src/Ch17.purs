@@ -54,3 +54,52 @@ instance applyEither :: Apply (Either a) where
 
 instance applicativeEither :: Applicative (Either a) where
   pure = Right
+
+newtype Validation err result = Validation (Either err result)
+derive newtype instance functorValidation :: Functor (Validation a)
+derive newtype instance bifunctorValidation :: Bifunctor Validation
+derive newtype instance eqValidation :: (Eq a, Eq b) => Eq (Validation a b)
+derive newtype instance ordValidation :: (Ord a, Ord b) => Ord (Validation a b)
+derive instance genericValidation :: Generic (Validation a b) _
+
+instance applyValidation :: Semigroup err => Apply (Validation err) where
+  apply (Validation (Left err1)) (Validation (Left err2)) = Validation $ Left $ err1 <> err2
+  apply (Validation (Left err)) _ = Validation $ Left err
+  apply (Validation (Right f)) x = f <$> x
+
+instance applicativeValidation :: Semigroup err => Applicative (Validation err) where
+  pure = Validation <<< Right
+
+instance showValidation :: (Show a, Show b) => Show (Validation a b) where
+  show = genericShow
+
+newtype Age = Age Int
+newtype FullName = FullName String
+
+derive newtype instance showAge :: Show Age
+derive newtype instance showFullName :: Show FullName
+
+type FamilyAgesRow r = ( fatherAge :: Age, motherAge :: Age, childAge :: Age | r )
+type FamilyNamesRow r = ( fatherName :: FullName, motherName :: FullName, childName :: FullName | r )
+
+newtype Family = Family { | FamilyNamesRow (FamilyAgesRow ()) }
+newtype FamilyAges = FamilyAges { | FamilyAgesRow () }
+
+derive instance genericFamilyAges :: Generic FamilyAges _
+instance showFamilyAges :: Show FamilyAges where
+  show = genericShow
+
+newtype LowerAge = LowerAge Int
+newtype UpperAge = UpperAge Int
+
+validateAge :: LowerAge -> UpperAge -> Age -> String -> Validation (Array String) Age
+validateAge (LowerAge low) (UpperAge high) actualAge@(Age age) who | age < low = Validation (Left [who <> " is too young."])
+                                                                   | age > high = Validation (Left [who <> " is too old."])
+                                                                   | otherwise = Validation (Right $ actualAge)
+
+createFamilyAges :: { | FamilyAgesRow () } -> Validation (Array String) FamilyAges
+createFamilyAges { fatherAge, motherAge, childAge } = FamilyAges <$>
+  ({ fatherAge: _, motherAge: _, childAge: _ } <$>
+  (validateAge (LowerAge 1) (UpperAge 18) fatherAge "Father") <*> 
+  (validateAge (LowerAge 1) (UpperAge 18) motherAge "Mother") <*> 
+  (validateAge (LowerAge 1) (UpperAge 18) childAge "Child"))
