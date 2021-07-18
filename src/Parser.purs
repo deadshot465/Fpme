@@ -3,13 +3,17 @@ module Parser where
 import Prelude
 
 import Control.Alt (class Alt, (<|>))
+import Control.Lazy (class Lazy, defer)
+import Data.Array ((:))
 import Data.CodePoint.Unicode (isAlpha, isDecDigit)
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (Maybe(..))
+import Data.Int (fromString)
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.NonEmpty (NonEmpty, (:|), fromNonEmpty)
 import Data.Show.Generic (genericShow)
 import Data.String (codePointFromChar)
-import Data.String.CodeUnits (fromCharArray, uncons)
+import Data.String.CodeUnits (fromCharArray, singleton, uncons)
 import Data.Traversable (class Traversable, sequence)
 import Data.Tuple (Tuple(..))
 import Data.Unfoldable (class Unfoldable, none, replicate)
@@ -28,14 +32,24 @@ test = do
   log $ show $ parse' (count' 4 letter) "Freddy"
   log $ show $ parse' (count' 10 alphaNum) "a1b2c3d4e5"
   log $ show $ parse' (count' 10 alphaNum) "######"
+  log $ show $ parse' (atMost' (-2) alphaNum) "a1b2c3"
+  log $ show $ parse' (atMost' 2 alphaNum) "$_$"
+  log $ show $ parse' (atMost' 2 alphaNum) "a1b2c3"
+  log $ show $ parse' monthFirst "12/31/1999"
+  log $ show $ parse' (some' digit) "2343423423abc"
+  log $ show $ parse' (many' digit) "_2343423423abc"
+  log $ show $ parse' (some' digit) "_2343423423abc"
+  log $ show $ parse' ugly "17, some words"
+  log $ show $ parse' ugly "5432, some more words1234567890"
 
 type ParserState a = Tuple String a
 
 class ParserError e where
   eof :: e
   invalidChar :: String -> e
+  invalidDate :: String -> e
 
-data PError = EOF | InvalidChar String
+data PError = EOF | InvalidChar String | InvalidDate String
 derive instance genericPError :: Generic PError _
 instance showPError :: Show PError where
   show = genericShow
@@ -43,6 +57,7 @@ instance showPError :: Show PError where
 instance parserErrorPError :: ParserError PError where
   eof = EOF
   invalidChar msg = InvalidChar msg
+  invalidDate msg = InvalidDate msg
 
 type ParserFunction e a = ParserError e => String -> Either e (ParserState a)
 
@@ -128,3 +143,124 @@ alphaNum = letter <|> digit <|> fail (invalidChar "alphaNum")
 
 count' :: ∀ e. Int -> Parser e Char -> Parser e String
 count' n p = fromCharArray <$> count n p
+
+newtype Year = Year Int
+derive instance genericYear :: Generic Year _
+instance showYear :: Show Year where
+  show = genericShow
+
+newtype Month = Month Int
+derive instance genericMonth :: Generic Month _
+instance showMonth :: Show Month where
+  show = genericShow
+
+newtype Day = Day Int
+derive instance genericDay :: Generic Day _
+instance showDay :: Show Day where
+  show = genericShow
+
+data DateFormat = YearFirst | MonthFirst
+
+type DateParts = 
+  { year :: Year
+  , month :: Month
+  , day :: Day
+  , format :: DateFormat
+  }
+
+derive instance genericDateFormat :: Generic DateFormat _
+instance showDateFormat :: Show DateFormat where
+  show = genericShow
+
+{- atMost :: ∀ e a. Int -> Parser e a -> Parser e (Array a)
+atMost n p | n <= 0 = pure []
+           | otherwise = optional [] $ p >>= \c -> (c : _) <$> atMost (n - 1) p -}
+
+atMost :: ∀ e a f. Unfoldable f => (a -> f a -> f a) -> Int -> Parser e a -> Parser e (f a)
+atMost cons n p | n <= 0 = pure none
+                | otherwise = optional none $ p >>= \c -> cons c <$> atMost cons (n - 1) p
+
+atMost' :: forall e. Int -> Parser e Char -> Parser e String
+atMost' n p = fromCharArray <$> atMost (:) n p
+
+optional :: ∀ f a. Alt f => Applicative f => a -> f a -> f a
+optional x p = p <|> pure x
+
+range :: ∀ e a f. Semigroup (f a) => Traversable f => Unfoldable f => (a -> f a -> f a) -> Int -> Int -> Parser e a -> Parser e (f a)
+range cons min max p | min < 0 || max <= 0 || max < min = pure none
+                     | otherwise = count min p >>= \cs -> (cs <> _) <$> atMost cons (max - min) p
+
+range' :: ∀ e. Int -> Int -> Parser e Char -> Parser e String
+range' min max p = fromCharArray <$> range (:) min max p
+
+constChar :: ∀ e. ParserError e => Char -> Parser e Unit
+constChar = void <<< constChar'
+
+constChar' :: ∀ e. ParserError e => Char -> Parser e Char
+constChar' c = satisfy (singleton c) (_ == c)
+
+digitsToNum :: String -> Int
+digitsToNum = fromMaybe 0 <<< fromString
+
+yearFirst :: ∀ e. ParserError e => Parser e DateParts
+yearFirst = do
+  year <- count' 4 digit <#> digitsToNum >>> Year
+  --year <- count' 4 digit >>= \s -> pure $ (fromString s) >>= \i -> pure $ Year i
+  constChar '-'
+  month <- range' 1 2 digit <#> digitsToNum >>> Month
+  constChar '-'
+  day <- range' 1 2 digit <#> digitsToNum >>> Day
+  pure { year, month, day, format: YearFirst }
+
+monthFirst :: ∀ e. ParserError e => Parser e DateParts
+monthFirst = do
+  month <- Month <<< digitsToNum <$> range' 1 2 digit
+  constChar '/'
+  day <- Day <<< digitsToNum <$> range' 1 2 digit
+  constChar '/'
+  year <- Year <<< digitsToNum <$> count' 4 digit
+  pure { year, month, day, format: MonthFirst }
+
+date :: ∀ e. ParserError e => Parser e DateParts
+date = yearFirst <|> monthFirst <|> fail (invalidDate "Invalid date.")
+
+some :: ∀ a f m
+  . Unfoldable f 
+  => Applicative m
+  => Lazy (m (f a)) 
+  => Alt m 
+  => (a -> f a -> f a) 
+  -> m a 
+  -> m (NonEmpty f a)
+some cons p = (:|) <$> p <*> defer \_ -> many cons p
+
+some' :: ∀ e. Parser e Char -> Parser e String
+some' p = fromCharArray <<< fromNonEmpty (:) <$> some (:) p
+
+many :: ∀ a f m
+  . Unfoldable f 
+  => Alt m 
+  => Applicative m 
+  => Lazy (m (f a)) 
+  => (a -> f a -> f a) 
+  -> m a 
+  -> m (f a)
+many cons p = fromNonEmpty cons <$> some cons p <|> pure none
+
+many' :: ∀ e. Parser e Char -> Parser e String
+many' p = fromCharArray <$> many (:) p
+
+instance lazyParser :: Lazy (Parser e a) where
+  defer f = Parser \s -> parse (f unit) s
+
+digits :: ∀ e. ParserError e => Parser e String
+digits = some' digit
+
+ugly :: ∀ e. ParserError e => Parser e (Array String)
+ugly = do
+  p1 <- range' 1 4 digit
+  constChar ','
+  constChar ' '
+  p2 <- some' (letter <|> constChar' ' ')
+  p3 <- many' digit
+  pure [p1, p2, p3]
