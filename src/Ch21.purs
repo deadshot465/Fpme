@@ -3,17 +3,25 @@ module Ch21 where
 import Prelude
 
 import Control.Monad.Error.Class (class MonadThrow, throwError)
+import Control.Monad.Except.Trans as E
 import Control.Monad.Reader (class MonadAsk, ask)
-import Control.Monad.State (class MonadState)
+import Control.Monad.State (class MonadState, get, put)
+import Control.Monad.State.Trans as S
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer (class MonadTell, tell)
+import Control.Monad.Writer.Trans as W
+import Data.Either (Either(..))
+import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Console (log)
 
 test :: Effect Unit
 test = do
-  log "Helo"
+  result1 <- runApp 0 app
+  log $ show result1
+  result2 <- runApp 99 app
+  log $ show result2
 
 newtype StateT s m a = StateT (s -> m (Tuple a s))
 
@@ -52,4 +60,34 @@ instance Monad m => MonadState s (StateT s m) where
   state f = StateT $ pure <<< f
 
 instance MonadThrow e m => MonadThrow e (StateT s m) where
-  throwError = lift <<< throwError 
+  throwError = lift <<< throwError
+
+type AppStack e w s a = E.ExceptT e (W.WriterT w (S.StateT s Effect)) a
+
+type AppM = AppStack String String Int Unit
+
+type StackResult = Tuple (Tuple (Either String Unit) String) Int
+
+type AppEffects =
+  { log :: String
+  , state :: Int
+  , result :: Maybe Unit
+  }
+
+type AppResult = Tuple (Maybe String) AppEffects
+
+runApp :: Int -> AppM -> Effect StackResult
+runApp st = E.runExceptT >>> W.runWriterT >>> flip S.runStateT st
+
+results :: StackResult -> AppResult
+results (Tuple (Tuple (Left err) l) s) = Tuple (Just err) ({ log: l, state: s, result: Nothing })
+results (Tuple (Tuple (Right res) l) s) = Tuple Nothing ({ log: l, state: s, result: Just res })
+
+app :: AppM
+app = do
+  tell "Starting the app..."
+  n <- get
+  when (n == 0) $ void $ throwError "We cannot have a 0 state!"
+  put $ n + 1
+  tell "Incremented state."
+  pure unit
