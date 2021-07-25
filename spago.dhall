@@ -28,6 +28,7 @@ to generate this file without the comments in this block.
   , "profunctor"
   , "psci-support"
   , "strings"
+  , "transformers"
   , "tuples"
   , "unfoldable"
   , "unicode"
