@@ -17,6 +17,7 @@ to generate this file without the comments in this block.
   , "console"
   , "contravariant"
   , "control"
+  , "debug"
   , "effect"
   , "either"
   , "foldable-traversable"

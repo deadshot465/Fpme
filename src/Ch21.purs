@@ -14,14 +14,14 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Console (log)
+import Effect.Console as Console
 
 test :: Effect Unit
 test = do
   result1 <- runApp 0 app
-  log $ show result1
+  Console.log $ show result1
   result2 <- runApp 99 app
-  log $ show result2
+  Console.log $ show result2
 
 newtype StateT s m a = StateT (s -> m (Tuple a s))
 
@@ -76,8 +76,8 @@ type AppEffects =
 
 type AppResult = Tuple (Maybe String) AppEffects
 
-runApp :: Int -> AppM -> Effect StackResult
-runApp st = E.runExceptT >>> W.runWriterT >>> flip S.runStateT st
+runApp :: Int -> AppM -> Effect AppResult
+runApp st = E.runExceptT >>> W.runWriterT >>> flip S.runStateT st >>> (results <$> _)
 
 results :: StackResult -> AppResult
 results (Tuple (Tuple (Left err) l) s) = Tuple (Just err) ({ log: l, state: s, result: Nothing })
@@ -85,9 +85,12 @@ results (Tuple (Tuple (Right res) l) s) = Tuple Nothing ({ log: l, state: s, res
 
 app :: AppM
 app = do
-  tell "Starting the app..."
+  log "Starting the app..."
   n <- get
   when (n == 0) $ void $ throwError "We cannot have a 0 state!"
   put $ n + 1
-  tell "Incremented state."
+  log "Incremented state."
   pure unit
+
+log :: ∀ m. MonadTell String m => String -> m Unit
+log s = tell $ s <> "\n"
