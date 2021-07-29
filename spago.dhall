@@ -12,7 +12,10 @@ to generate this file without the comments in this block.
 -}
 { name = "my-project"
 , dependencies =
-  [ "arrays"
+  [ "aff"
+  , "aff-bus"
+  , "arrays"
+  , "avar"
   , "bifunctors"
   , "console"
   , "contravariant"
@@ -28,6 +31,7 @@ to generate this file without the comments in this block.
   , "prelude"
   , "profunctor"
   , "psci-support"
+  , "random"
   , "strings"
   , "transformers"
   , "tuples"
