@@ -1,0 +1,25 @@
+{
+  "name": "fp-book",
+  "version": "1.0.0",
+  "description": "Functional Programming Made Easier practices.",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deadshot465/Fpme.git"
+  },
+  "author": "Tetsuki Syu",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/deadshot465/Fpme/issues"
+  },
+  "homepage": "https://github.com/deadshot465/Fpme#readme",
+  "dependencies": {
+    "xhr2": "^0.2.1"
+  }
+}

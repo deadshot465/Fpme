@@ -5,11 +5,8 @@ import Prelude
 import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
 import Control.Monad.Rec.Class (forever)
 import Control.Monad.State (StateT, get, modify_, runStateT)
-import Data.Either (Either(..))
-import Data.Tuple (Tuple)
 import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds(..), delay, forkAff, launchAff_)
-import Effect.Aff.AVar (AVar)
 import Effect.Aff.Bus (BusRW)
 import Effect.Aff.Bus as Bus
 import Effect.Class (liftEffect)
@@ -21,9 +18,9 @@ test = launchAff_ do
   bus <- Bus.make
   let forkFiberM = runFiberM bus
   forkFiberM logger
-  forkFiberM $ randomGenerator (_ > 0.5)
-  forkFiberM $ randomGenerator (_ < 0.5)
-  forkFiberM $ randomGenerator (_ > 0.1)
+  forkFiberM $ randomGenerator "greater than 0.5" (_ > 0.5)
+  forkFiberM $ randomGenerator "less than 0.5" (_ < 0.5)
+  forkFiberM $ randomGenerator "greater than 0.1" (_ > 0.1)
 
 type Config = { bus :: BusRW String }
 type State = { count :: Int }
@@ -47,19 +44,23 @@ logger = forever do
   s <- liftAffToFiberM $ Bus.read bus
   log $ "Logger: " <> s
 
-randomGenerator :: (Number -> Boolean) -> FiberM Unit
-randomGenerator pred = do
+randomGenerator :: String -> (Number -> Boolean) -> FiberM Unit
+randomGenerator valueType pred = do
   { count } <- get
   unless (count <= 0) do
     { bus } <- ask
     liftAffToFiberM do
       n <- delayRandom
-      when (pred n) $ Bus.write "Message" bus
+      when (pred n) $ flip Bus.write bus $ "Found a value that is " <> valueType <> " (" <> show n <> ")"
     modify_ _ { count = count - 1 }
-    randomGenerator pred
+    randomGenerator valueType pred
 
 liftAffToFiberM :: Aff ~> FiberM
 liftAffToFiberM = lift <<< lift
 
 delayRandom :: Aff Number
+--delayRandom = delay (Milliseconds 1000.0) *> constant
 delayRandom = delay (Milliseconds 1000.0) *> randomAff
+
+constant :: Aff Number
+constant = pure 0.0
