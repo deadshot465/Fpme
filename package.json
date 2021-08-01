@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/deadshot465/Fpme#readme",
   "dependencies": {
+    "chalk": "^4.1.2",
     "xhr2": "^0.2.1"
   }
 }
